@@ -135,51 +135,49 @@ pub const SECRET_CODE: u8 = 0x3d;
 /// - `map_base` must point to valid, properly aligned memory of sufficient size
 /// - The memory must remain valid for the lifetime of the map
 pub unsafe fn init(map_base: *mut u8, config: &MapInit) {
+    debug_assert!(
+        config.capacity.is_power_of_two(),
+        "Capacity must be a power of two"
+    );
+
+    let map_header = map_base.cast::<MapHeader>();
+    let layout = calculate_bucket_layout(
+        config.key_size,
+        config.key_alignment,
+        config.value_size,
+        config.value_alignment,
+    );
+
+    // Initialize header
     unsafe {
-        debug_assert!(
-            config.capacity.is_power_of_two(),
-            "Capacity must be a power of two"
+        ptr::write(
+            map_header,
+            MapHeader {
+                capacity: config.capacity,
+                logical_limit: config.logical_limit,
+                key_size: config.key_size,
+                value_size: config.value_size,
+                bucket_size: layout.bucket_size,
+                key_offset: layout.key_offset,
+                value_offset: layout.value_offset,
+                element_count: 0,
+                padding_and_secret_code: SECRET_CODE,
+            },
         );
+    }
 
-        let map_header = map_base.cast::<MapHeader>();
-        let layout = calculate_bucket_layout(
-            config.key_size,
-            config.key_alignment,
-            config.value_size,
-            config.value_alignment,
-        );
+    // Initialize buckets to empty
+    let buckets_start_ptr = unsafe { map_base.add(MAP_BUCKETS_OFFSET) };
+    let capacity = usize::from(config.capacity);
+    let bucket_size = layout.bucket_size as usize;
 
-        // Initialize header
+    // Zero out all bucket status bytes (Empty = 0)
+    for i in 0..capacity {
         unsafe {
             ptr::write(
-                map_header,
-                MapHeader {
-                    capacity: config.capacity,
-                    logical_limit: config.logical_limit,
-                    key_size: config.key_size,
-                    value_size: config.value_size,
-                    bucket_size: layout.bucket_size,
-                    key_offset: layout.key_offset,
-                    value_offset: layout.value_offset,
-                    element_count: 0,
-                    padding_and_secret_code: SECRET_CODE,
-                },
+                buckets_start_ptr.add(i * bucket_size),
+                BucketStatus::Empty as u8,
             );
-        }
-
-        // Initialize buckets to empty
-        let buckets_start_ptr = map_base.add(MAP_BUCKETS_OFFSET);
-        let capacity = usize::from(config.capacity);
-        let bucket_size = layout.bucket_size as usize;
-
-        // Zero out all bucket status bytes (Empty = 0)
-        for i in 0..capacity {
-            unsafe {
-                ptr::write(
-                    buckets_start_ptr.add(i * bucket_size),
-                    BucketStatus::Empty as u8,
-                );
-            }
         }
     }
 }
