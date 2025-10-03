@@ -197,16 +197,13 @@ pub unsafe fn init(map_base: *mut u8, config: &MapInit) {
 unsafe fn matches_key(a: *const u8, b: *const u8, len: usize) -> bool {
     unsafe {
         if len <= 16 {
-            match len {
-                0 => true,
-                _ => {
-                    for i in 0..len {
-                        if *a.add(i) != *b.add(i) {
-                            return false;
-                        }
+            if len == 0 { true } else {
+                for i in 0..len {
+                    if *a.add(i) != *b.add(i) {
+                        return false;
                     }
-                    true
                 }
+                true
             }
         } else {
             slice::from_raw_parts(a, len) == slice::from_raw_parts(b, len)
